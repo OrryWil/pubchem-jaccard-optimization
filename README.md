@@ -10,29 +10,51 @@ Standard pairwise similarity computation is computationally expensive for large 
 This project addresses the problem using two main improvements:
 
 ### 1. Pre-filtering (Bucketizing Approach)
-- Reduces the number of candidate comparisons
-- Groups molecules into buckets based on shared characteristics
-- Avoids unnecessary full pairwise similarity calculations
+- Reduces number of candidate comparisons
+- Groups molecules into buckets based on shared fingerprint characteristics
+- Avoids unnecessary full pairwise similarity computation
 
 ### 2. Weighted Similarity Method ("Willems Method")
 - Extends traditional Jaccard/Tanimoto similarity
-- Assigns different weights to specific positions/features in molecular representations
+- Assigns weights to specific fingerprint positions
 - Improves sensitivity to important structural differences
 
 ## System Components
-- `bucketizing/` → Pre-filtering and candidate reduction logic  
-- `brute_force/` → Baseline similarity computation for comparison  
-- `benchmark/` → Performance evaluation scripts  
-- `tanimoto.py` → Standard similarity calculations  
-- `Willems.py` → Weighted similarity implementation  
+- `bucketizing/` → Pre-filtering and candidate reduction logic
+- `brute_force/` → Baseline similarity computation for comparison
+- `benchmark/` → Performance evaluation scripts
+- `tanimoto.py` → Standard similarity calculation
+- `Willems.py` → Weighted similarity implementation
+
+## Setup
+
+It is recommended to run this project inside a virtual environment:
+
+python3 -m venv venv
+source venv/bin/activate  # Mac/Linux
+pip install pandas
+
+## How to Run
+Generate the dataset:
+python3 generate_small_dataset.py
+
+Run full benchmark:
+python3 benchmark/run_benchmark.py
+
+Run similarity comparison:
+python3 benchmark/run_benchmark_similarity.py
+
+## Dataset Notes
+Large PubChem-scale datasets are not included due to size constraints. A synthetic dataset generator is provided for testing and benchmarking purposes.
 
 ## Results
-The optimized pipeline significantly reduces computation time compared to brute-force similarity while maintaining meaningful similarity comparisons through weighted scoring.
-
-## Notes
-Large datasets are not included in this repository due to size constraints. The system is designed to scale to PubChem-level datasets and can be tested using generated or sampled data.
+The optimized pipeline reduces computation time compared to brute-force similarity while maintaining meaningful similarity accuracy through weighted scoring and pre-filtering.
 
 ## Technologies
 - Python
+- Pandas
 - NumPy
-- Data processing pipelines for molecular fingerprints
+- Custom molecular fingerprint processing
+
+## Author
+Orry Willems

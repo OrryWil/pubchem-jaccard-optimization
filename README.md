@@ -31,8 +31,7 @@ This project addresses the problem using two main improvements:
 It is recommended to run this project inside a virtual environment:
 
 python3 -m venv venv
-source venv/bin/activate  
-# Mac/Linux
+source venv/bin/activate
 pip install pandas
 
 ## How to Run

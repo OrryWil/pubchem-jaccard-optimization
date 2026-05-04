@@ -70,7 +70,7 @@ def brute_force(query_fp, fingerprints, threshold):
 
 def main():
 
-    DATA_PATH = "data/pubchem_fingerprints.csv"
+    DATA_PATH = "data/sample_data.csv"
 
     df = pd.read_csv(
         DATA_PATH,

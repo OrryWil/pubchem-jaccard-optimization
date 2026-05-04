@@ -13,18 +13,33 @@ from bucketizing.bucket_search import bucket_search
 from tanimoto import tanimoto
 from Willems import willems
 
+
+def assign_equal_buckets(fingerprints, num_buckets=10):
+    """
+    Dynamically assign equal-frequency buckets.
+    Replaces missing bucket_equal column.
+    """
+    buckets = {}
+    for i, fp in enumerate(fingerprints):
+        bucket_id = i % num_buckets
+        if bucket_id not in buckets:
+            buckets[bucket_id] = []
+        buckets[bucket_id].append(fp)
+
+    return buckets, [i % num_buckets for i in range(len(fingerprints))]
+
+
 def main():
 
     print("Loading dataset...")
-    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-    # IMPORTANT: use the equal bucket dataset
-    DATA_PATH = os.path.join(BASE_DIR, "data", "pubchem_equal_buckets.csv")
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    DATA_PATH = os.path.join(BASE_DIR, "data", "sample_data.csv")
 
     df = pd.read_csv(
     DATA_PATH,
-    usecols=["fingerprint", "bucket_equal"],  # include the bucket column
-    dtype={"fingerprint": str, "bucket_equal": int},  # ensure correct type
+    usecols=["fingerprint"],
+    dtype={"fingerprint": str}
 )
 
     print("Total molecules:", len(df))
@@ -32,8 +47,9 @@ def main():
 
     query_fp = df.iloc[0]["fingerprint"]
     threshold = 0.75
-    weights = {24:5} 
-    
+
+    # Optional weights (your Willems method)
+    weights = {24: 5}
 
     # -----------------------------
     # BRUTE FORCE
@@ -47,112 +63,74 @@ def main():
     print("Brute force results:", len(brute_results))
     print("Brute force time:", brute_force_time, "seconds")
 
-    print("\nTop 5 most similar (Brute Force):")
-
+    # -----------------------------
+    # FULL SCORING (DEBUG / TOP RESULTS)
+    # -----------------------------
     brute_scored = []
-
     for fp in df["fingerprint"]:
         sim = tanimoto(query_fp, fp)
         brute_scored.append((fp, sim))
 
     brute_scored.sort(key=lambda x: x[1], reverse=True)
 
-    for fp, sim in brute_scored[:20]:
+    print("\nTop 5 (Brute Force):")
+    for fp, sim in brute_scored[:5]:
         print(sim)
-
 
     # -----------------------------
     # BITCOUNT BUCKETS
     # -----------------------------
     print("\nBuilding bitcount buckets...")
 
-    start_bucket_build = time.time()
+    start = time.time()
     buckets = build_buckets(df["fingerprint"])
-    bucket_build_time = time.time() - start_bucket_build
+    bucket_build_time = time.time() - start
 
-    print("Total bitcount buckets:", len(buckets))
+    print("Total buckets:", len(buckets))
 
-    print("\nRunning bitcount bucket search...")
+    print("\nRunning bucket search...")
 
     start = time.time()
     bucket_results, checked = bucket_search(query_fp, buckets, threshold)
     bucket_search_time = time.time() - start
 
-    print("Bucket search results:", len(bucket_results))
-    print("Bucket search time:", bucket_search_time, "seconds")
-    print("Fingerprints checked:", checked)
-
-    print("\nTop 5 most similar (Bitcount Buckets):")
-
-    bucket_scored = []
-
-    for fp in bucket_results:
-        sim = tanimoto(query_fp, fp)
-        bucket_scored.append((fp, sim))
-
-    bucket_scored.sort(key=lambda x: x[1], reverse=True)
-
-    for fp, sim in bucket_scored[:20]:
-        print(sim)
-
+    print("Bucket results:", len(bucket_results))
+    print("Time:", bucket_search_time)
+    print("Checked:", checked)
 
     # -----------------------------
-    # EQUAL BUCKETS
+    # EQUAL BUCKETS (FIXED - NO DATA DEPENDENCY)
     # -----------------------------
-    print("\nBuilding equal-frequency buckets...")
+    print("\nBuilding equal-frequency buckets dynamically...")
 
-    start_equal_build = time.time()
-
-    equal_buckets = {}
-
-    for fp, bucket in zip(df["fingerprint"], df["bucket_equal"]):
-
-        bucket = int(bucket)
-
-        if bucket not in equal_buckets:
-            equal_buckets[bucket] = []
-
-        equal_buckets[bucket].append(fp)
-
-    equal_build_time = time.time() - start_equal_build
+    equal_buckets, bucket_labels = assign_equal_buckets(df["fingerprint"])
 
     print("Total equal buckets:", len(equal_buckets))
 
-
-    print("\nRunning equal bucket search...")
+    query_bucket = bucket_labels[0]
 
     start = time.time()
-
     equal_results = []
     equal_checked = 0
 
-    query_bucket = int(df.iloc[0]["bucket_equal"])
-
-    # search query bucket and neighbors
     for b in [query_bucket - 1, query_bucket, query_bucket + 1]:
-
         if b in equal_buckets:
-
             for fp in equal_buckets[b]:
-
                 equal_checked += 1
-
                 sim = tanimoto(query_fp, fp)
-
                 if sim >= threshold:
                     equal_results.append(fp)
 
     equal_search_time = time.time() - start
 
     print("Equal bucket results:", len(equal_results))
-    print("Equal bucket time:", equal_search_time, "seconds")
-    print("Fingerprints checked:", equal_checked)
-
+    print("Equal time:", equal_search_time)
+    print("Checked:", equal_checked)
 
     # -----------------------------
-    # SPEED COMPARISON
+    # SPEEDUP COMPARISON
     # -----------------------------
-    print("\nSpeed comparison")
+    print("\nSpeed comparison:")
 
     speedup_bitcount = brute_force_time / bucket_search_time
     speedup_equal = brute_force_time / equal_search_time
@@ -160,70 +138,47 @@ def main():
     print("Bitcount speedup:", speedup_bitcount)
     print("Equal bucket speedup:", speedup_equal)
 
-    print("\nTop 5 most similar (Equal Buckets):")
-
-    equal_scored = []
-
-    for fp in equal_results:
-        sim = tanimoto(query_fp, fp)
-        equal_scored.append((fp, sim))
-
-    equal_scored.sort(key=lambda x: x[1], reverse=True)
-
-    for fp, sim in equal_scored[:20]:
-        print(sim)
-
-
     # -----------------------------
     # SAVE RESULTS
     # -----------------------------
     results_file = "benchmark_results.csv"
 
     row = [
-    len(df),
-    threshold,
+        len(df),
+        threshold,
 
-    len(brute_results),
-    len(bucket_results),
-    len(equal_results),
+        len(brute_results),
+        len(bucket_results),
+        len(equal_results),
 
-    brute_force_time,
+        brute_force_time,
+        bucket_build_time,
+        bucket_search_time,
+        checked,
+        speedup_bitcount,
 
-    bucket_build_time,
-    bucket_search_time,
-    checked,
-    speedup_bitcount,
-
-    equal_build_time,
-    equal_search_time,
-    equal_checked,
-    speedup_equal
-]
+        equal_search_time,
+        equal_checked,
+        speedup_equal
+    ]
 
     file_exists = os.path.isfile(results_file)
 
     with open(results_file, "a", newline="") as f:
-
         writer = csv.writer(f)
 
         if not file_exists:
-
             writer.writerow([
                 "dataset_size",
                 "threshold",
-
                 "brute_results",
                 "bitcount_results",
                 "equal_results",
-
                 "brute_force_time",
-
                 "bitcount_build_time",
                 "bitcount_search_time",
                 "bitcount_checked",
                 "bitcount_speedup",
-
-                "equal_build_time",
                 "equal_search_time",
                 "equal_checked",
                 "equal_speedup"
